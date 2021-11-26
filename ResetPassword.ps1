@@ -1,118 +1,153 @@
-# Main Function to Update Password
-Function Show_Notification([string]$s){
-    [System.Windows.Forms.MessageBox]::Show($s, "Notification") 
+function Show_Notification([string]$s){
+    $r=[System.Windows.Forms.MessageBox]::Show($s, "Notification")
 }
 
 Function Show_Error([string]$e){
-    [System.Windows.Forms.MessageBox]::Show($e, "Error") 
+    $r=[System.Windows.Forms.MessageBox]::Show($e, "Error")
 }
 
-Function Check_Plugin(){
-    if (-Not (Get-Module -ListAvailable -Name MSOnline)) {
-        Show_Notification "Installing module... If any notification comes out, please click ""Yes to All"""       
+function Check_Plugin($m){
+    if (-Not (Get-Module -ListAvailable -Name $m)) {
+        Show_Notification "Attention!!!!`nT$m will be installed.`nClick OK to start install.`nPlease wait for a while`nIf any notification comes out, please click ""Yes to All"""       
+        $LabelMsg.Text = "Installing $m ..."
         try{
-            install-module MSOnline
+            install-module $m
         }
         catch{
-             Show_Error "Error!!! Unable to install plugin: MSOnline. Please install manually."
+             return $_.Exception.Message
         }
     }
+    return $true
 }
-Function Update_Password([string]$mgrusername,[string]$mgrpassword,[string]$username,[string]$password){    
-    Check_Plugin
-    import-module MSOnline
-    $PWord = ConvertTo-SecureString -String $mgrpassword -AsPlainText -Force
-    $Credential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $mgrusername, $PWord
-    $LabelMsg.Text = "Getting Credential"
-    $NotificationForm.Hide()
-    $NotificationForm.Show()
-    Connect-MsolService -Credential $Credential
+
+# This is the function for login only.
+function Login_Core([string]$mngrusername,[SecureString]$mngrpassword){
+    try{
+        Connect-MsolService -Credential (New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $mngrusername, $mngrpassword) -ErrorAction Stop
+        return $true
+    }
+    catch{
+        return $_.Exception.Message
+    }
+}
+
+# This is the function changing user password only.
+# Login_Core should be called to ensure login successfully before call this function
+# Check Plugin is suggested Before the first time call this function
+function ChangePW_Core([string]$username,[SecureString]$password){
+    # Change Password
+    import-module MSOnline  
     $LabelMsg.Text = "Changing Password"
+    try{
+        Set-MsolUserPassword -UserPrincipalName $username -NewPassword $password -ForceChangePassword:$False -ErrorAction Stop
+        Show_Notification "Update Success"
+        return $true
+    }
+    catch{
+        return $_.Exception.Message
+    }
+
+}
+
+function Update_Password([string]$mngrusername,[SecureString]$mngrpassword,[string]$username,[SecureString]$password){
+    
+    $NotificationForm.Show() 
+
+    # Check Plugin
+    $Plugin= Check_Plugin "MSOnline"
+    if(-Not ($Plugin -eq $true)){
+        Show_Error $Plugin
+        $NotificationForm.Hide()
+        return
+    }
+    
+    # Login
+    $LabelMsg.Text = "Getting Credential"
+    $Login=Login_Core $mngrusername $mngrpassword
+    if(-Not ($Login -eq $true)){
+        Show_Error $Login
+        $NotificationForm.Hide()
+        return
+    }
+
+    # Call Password Changing Method
+    $Result=ChangePW_Core $username $password
+    if(-Not ($Result -eq $true)){
+        Show_Error $Result
+        $NotificationForm.Hide()
+        return
+    }
     $NotificationForm.Hide()
-    $NotificationForm.Show()
-    Set-MsolUserPassword -UserPrincipalName $username -NewPassword $password -ForceChangePassword:$False
-    $LabelMsg.Text = "Success"
-    $NotificationForm.Hide()
-        $NotificationForm.Show()
+}
+
+function Generate_Label ([int]$locx,[int]$locy,[string]$text){
+    $Label = New-Object System.Windows.Forms.Label
+    $Label.AutoSize = $True
+    $Label.Location = New-Object System.Drawing.Point($locx,$locy) 
+    $Label.Text = $text    
+    return $Label
+}
+
+function Generate_TextBox ([int]$locx,[int]$locy,[int]$sizew,[int]$sizeh,[string]$text){
+    $TextBox = New-Object System.Windows.Forms.TextBox
+    $TextBox.Location = New-Object System.Drawing.Point($locx,$locy)
+    $TextBox.Size = New-Object System.Drawing.Size($sizew,$sizeh)
+    $TextBox.Text = $text
+    return $TextBox
 }
 
 Add-Type -AssemblyName System.Windows.Forms
+
+# Main Window
 $PowerShellForms=New-Object System.Windows.Forms.Form
 $PowerShellForms.Text = "VIA Microsoft Account Managment Tool"
-$PowerShellForms.Size = New-Object System.Drawing.Size(300,450) 
+$PowerShellForms.AutoSize = $True
 $PowerShellForms.StartPosition = "CenterScreen"
 $PowerShellForms.SizeGripStyle = "Hide"
 
+#Tab Controller
 $FormTabControl = New-object System.Windows.Forms.TabControl 
 $FormTabControl.Size = "755,475" 
 $PowerShellForms.Controls.Add($FormTabControl)
 
+#Tab1 - Change Password
 $Tab1 = New-object System.Windows.Forms.Tabpage
 $Tab1.DataBindings.DefaultDataSourceUpdateMode = 0 
-$Tab1.UseVisualStyleBackColor = $True 
 $Tab1.Name = "Tab1" 
 $Tab1.Text = "Reset Passwords” 
+$Tab1.AutoSize = $True
 $FormTabControl.Controls.Add($Tab1)
 
-$Tab2 = New-object System.Windows.Forms.Tabpage
-$Tab2.DataBindings.DefaultDataSourceUpdateMode = 0 
-$Tab2.UseVisualStyleBackColor = $True 
-$Tab2.Name = "Tab1" 
-$Tab2.Text = "Create accounts” 
-$FormTabControl.Controls.Add($Tab2)
+$startx=10
+$textboxw=260
+$textboxh=20
+
+# Site Admin Username Text
+$Tab1.Controls.Add((Generate_Label $startx 20 "MngrUserName:"))
+
+# Site Admin Username TextBox
+$TextBoxMngrUserName=Generate_TextBox $startx 50 $textboxw $textboxh "itdeveloper@online.via.edu.au"
+$Tab1.Controls.Add($TextBoxMngrUserName)
+
+# Site Admin Password Text
+$Tab1.Controls.Add((Generate_Label $startx 90 "MngrPassword:"))
+
+# Site Admin Password TextBox
+$TextBoxMngrPassWord=Generate_TextBox $startx 120 $textboxw $textboxh ""
+$Tab1.Controls.Add($TextBoxMngrPassWord)
 
 # Username Text
-$LabelMgrUserName = New-Object System.Windows.Forms.Label
-$LabelMgrUserName.Location = New-Object System.Drawing.Point(10,20) 
-$LabelMgrUserName.Text = "MgrUserName:"
-$LabelMgrUserName.AutoSize = $True
-$Tab1.Controls.Add($LabelMgrUserName)
+$Tab1.Controls.Add((Generate_Label $startx 160 "UserName:"))
 
 # Username TextBox
-$TextBoxMgrUserName = New-Object System.Windows.Forms.TextBox
-$TextBoxMgrUserName.Text="itdeveloper@online.via.edu.au"
-$TextBoxMgrUserName.Location = New-Object System.Drawing.Point(10,50)
-$TextBoxMgrUserName.Size = New-Object System.Drawing.Size(260,20)
-$Tab1.Controls.Add($TextBoxMgrUserName)
-
-# Password Text
-$LabelMgrPassWord = New-Object System.Windows.Forms.Label
-$LabelMgrPassWord.Location = New-Object System.Drawing.Point(10,90) 
-$LabelMgrPassWord.Text = "MgrPassWord:"
-$LabelMgrPassWord.AutoSize = $True
-$Tab1.Controls.Add($LabelMgrPassWord)
-
-# Password TextBox
-$TextBoxMgrPassWord = New-Object System.Windows.Forms.TextBox
-$TextBoxMgrPassWord.Location = New-Object System.Drawing.Point(10,120)
-$TextBoxMgrPassWord.Size = New-Object System.Drawing.Size(260,20)
-$Tab1.Controls.Add($TextBoxMgrPassWord)
-
-# Username Text
-$LabelUserName = New-Object System.Windows.Forms.Label
-$LabelUserName.Location = New-Object System.Drawing.Point(10,160) 
-$LabelUserName.Text = "UserName:"
-$LabelUserName.AutoSize = $True
-$Tab1.Controls.Add($LabelUserName)
-
-# Username TextBox
-$TextBoxUserName = New-Object System.Windows.Forms.TextBox
-$TextBoxUserName.Location = New-Object System.Drawing.Point(10,190)
-$TextBoxUserName.Text="test_365login@online.via.edu.au"
-$TextBoxUserName.Size = New-Object System.Drawing.Size(260,20)
+$TextBoxUserName=Generate_TextBox $startx 190 $textboxw $textboxh "test_365login@online.via.edu.au"
 $Tab1.Controls.Add($TextBoxUserName)
 
 # Password Text
-$LabelPassWord = New-Object System.Windows.Forms.Label
-$LabelPassWord.Location = New-Object System.Drawing.Point(10,230) 
-$LabelPassWord.Text = "PassWord:"
-$LabelPassWord.AutoSize = $True
-$Tab1.Controls.Add($LabelPassWord)
+$Tab1.Controls.Add((Generate_Label $startx 230 "Password:"))
 
 # Password TextBox
-$TextBoxPassWord = New-Object System.Windows.Forms.TextBox
-$TextBoxPassWord.Location = New-Object System.Drawing.Point(10,260)
-$TextBoxPassWord.Size = New-Object System.Drawing.Size(260,20)
+$TextBoxPassWord=Generate_TextBox $startx 260 $textboxw $textboxh ""
 $Tab1.Controls.Add($TextBoxPassWord)
 
 # Nofitication Form
@@ -120,9 +155,7 @@ $NotificationForm=New-Object System.Windows.Forms.Form
 $NotificationForm.Text = "Notification"
 $NotificationForm.Size = New-Object System.Drawing.Size(400,100) 
 $NotificationForm.StartPosition = "CenterScreen"
-$LabelMsg = New-Object System.Windows.Forms.Label
-$LabelMsg.Location = New-Object System.Drawing.Point(10,20)
-$LabelMsg.AutoSize = $True
+$LabelMsg = Generate_Label 10 20 ""
 $NotificationForm.Controls.Add($LabelMsg)
 
 # Submit Button
@@ -131,50 +164,79 @@ $SubmitButton.Location = New-Object System.Drawing.Point(75,290)
 $SubmitButton.Size = New-Object System.Drawing.Size(75,23)
 $SubmitButton.Text="Submit"
 $SubmitButton.Add_Click({
-    $NotificationForm.Show()
-    Update_Password $TextBoxMgrUserName.Text $TextBoxMgrPassWord.Text $TextBoxUserName.Text $TextBoxPassWord.Text
-    
+    # Check Blank
+    if ($TextBoxMngrUserName.Text.Length -lt 1) {
+        Show_Notification "Please enter Admin email"
+        return
+    }
+
+    if ($TextBoxMngrPassWord.Text.Length -lt 1) {
+        Show_Notification "Please enter Admin Password"
+        return
+    }
+
+    if ($TextBoxUserName.Text.Length -lt 1) {
+        Show_Notification "Please enter User Email"
+        return
+    }
+
+    if ($TextBoxPassWord.Text.Length -lt 1) {
+        Show_Notification "Please enter User Password"
+        return
+    }
+
+    #To Secure String
+    $AdminWP = ConvertTo-SecureString -String $TextBoxMngrPassWord.Text -AsPlainText -Force
+    $UserWP = ConvertTo-SecureString -String $TextBoxPassWord.Text -AsPlainText -Force
+
+    # Run update
+    Update_Password $TextBoxMngrUserName.Text $AdminWP $TextBoxUserName.Text $UserWP
 })
 $Tab1.Controls.Add($SubmitButton)
 
-# Test Button
-$TestForms=New-Object System.Windows.Forms.Form
-$TestForms.Text = "Notification"
-$TestForms.Size = New-Object System.Drawing.Size(400,400) 
-$TestForms.StartPosition = "CenterScreen"
-$LabelMsg = New-Object System.Windows.Forms.Label
-$LabelMsg.Location = New-Object System.Drawing.Point(10,20) 
-$LabelMsg.Text = "Installing module... If any notification comes out, please click ""Yes to All"""
-$LabelMsg.AutoSize = $True
-$TestForms.Controls.Add($LabelMsg)
-$Test2 = New-Object System.Windows.Forms.Button
-$Test2.Location = New-Object System.Drawing.Point(150,290)
-$Test2.Size = New-Object System.Drawing.Size(100,23)
-$Test2.Text="Test"
-$Test2.Add_Click({
+#Tab2 - Create Accounts
+$Tab2 = New-object System.Windows.Forms.Tabpage
+$Tab2.DataBindings.DefaultDataSourceUpdateMode = 0 
+$Tab2.UseVisualStyleBackColor = $True 
+$Tab2.Name = "Tab1" 
+$Tab2.Text = "Create Accounts” 
+$FormTabControl.Controls.Add($Tab2)
 
-    $TestForms.Hide()
-    $LabelMsg.Text = "Changed Text"
+$FileBrowser = New-Object System.Windows.Forms.OpenFileDialog -Property @{ 
+    InitialDirectory = [Environment]::GetFolderPath('Desktop') 
+    Filter = 'Documents (*.docx)|*.docx|SpreadSheet (*.xlsx)|*.xlsx'
+}
+
+$SubmitButton1 = New-Object System.Windows.Forms.Button
+$SubmitButton1.Location = New-Object System.Drawing.Point(75,290)
+$SubmitButton1.Size = New-Object System.Drawing.Size(75,23)
+$SubmitButton1.Text="Submit"
+$SubmitButton1.Add_Click({
+    $FileBrowser.ShowDialog()
 })
-$TestForms.Controls.Add($Test2)
+$FileBrowser = New-Object System.Windows.Forms.OpenFileDialog -Property @{ 
+    InitialDirectory = [Environment]::GetFolderPath('Desktop') 
+    Filter = 'SpreadSheet (*.csv)|*.csv'
+}
+# $null = $FileBrowser.ShowDialog()
+
+$Tab2.Controls.Add($SubmitButton1)
 
 
-$Test = New-Object System.Windows.Forms.Button
-$Test.Location = New-Object System.Drawing.Point(150,290)
-$Test.Size = New-Object System.Drawing.Size(100,23)
-$Test.Text="Test"
 
-$Test.Add_Click({
 
-    $TestForms.Show()
-    
-})
-$Tab1.Controls.Add($Test)
+
+
+
+
+
 # Show
-$PowerShellForms.ShowDialog()
+
+$PowerShellForms.ShowDialog() | Out-Null
 
 # 需要完善的逻辑
 # 后缀选择
 # 账号密码非空
 # 返回信息展示
 # 布局合理化
+# Use: "ps2exe .\ResetPassword.ps1 .\target.exe -noConsole -credentialGUI" to compile
