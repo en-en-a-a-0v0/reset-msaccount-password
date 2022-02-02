@@ -34,14 +34,14 @@ function Login_Core([string]$mngrusername,[SecureString]$mngrpassword){
 # This is the function changing user password only.
 # Login_Core should be called to ensure login successfully before call this function
 # Check Plugin is suggested Before the first time call this function
-function ChangePW_Core([string]$username,[SecureString]$password){
+function ChangePW_Core([string]$username,[string]$password){
     # Change Password
     import-module MSOnline  
     $LabelMsg.Text = "Changing Password"
     try{
         Set-MsolUserPassword -UserPrincipalName $username -NewPassword $password -ForceChangePassword:$False -ErrorAction Stop
-        Show_Notification "Update Success"
-        return $true
+        return "is the new password. Update Success"
+        # return $true
     }
     catch{
         return $_.Exception.Message
@@ -49,7 +49,7 @@ function ChangePW_Core([string]$username,[SecureString]$password){
 
 }
 
-function Update_Password([string]$mngrusername,[SecureString]$mngrpassword,[string]$username,[SecureString]$password){
+function Update_Password([string]$mngrusername,[SecureString]$mngrpassword,[string]$username,[string]$password){
     
     $NotificationForm.Show() 
 
@@ -80,6 +80,7 @@ function Update_Password([string]$mngrusername,[SecureString]$mngrpassword,[stri
     $NotificationForm.Hide()
 }
 
+# Return a label object
 function Generate_Label ([int]$locx,[int]$locy,[string]$text){
     $Label = New-Object System.Windows.Forms.Label
     $Label.AutoSize = $True
@@ -88,6 +89,7 @@ function Generate_Label ([int]$locx,[int]$locy,[string]$text){
     return $Label
 }
 
+# Return a textbox object
 function Generate_TextBox ([int]$locx,[int]$locy,[int]$sizew,[int]$sizeh,[string]$text){
     $TextBox = New-Object System.Windows.Forms.TextBox
     $TextBox.Location = New-Object System.Drawing.Point($locx,$locy)
@@ -100,7 +102,7 @@ Add-Type -AssemblyName System.Windows.Forms
 
 # Main Window
 $PowerShellForms=New-Object System.Windows.Forms.Form
-$PowerShellForms.Text = "VIA Microsoft Account Managment Tool"
+$PowerShellForms.Text = "VIA Microsoft Account Management Tool"
 $PowerShellForms.AutoSize = $True
 $PowerShellForms.StartPosition = "CenterScreen"
 $PowerShellForms.SizeGripStyle = "Hide"
@@ -126,7 +128,7 @@ $textboxh=20
 $Tab1.Controls.Add((Generate_Label $startx 20 "MngrUserName:"))
 
 # Site Admin Username TextBox
-$TextBoxMngrUserName=Generate_TextBox $startx 50 $textboxw $textboxh "itdeveloper@online.via.edu.au"
+$TextBoxMngrUserName=Generate_TextBox $startx 50 $textboxw $textboxh ""
 $Tab1.Controls.Add($TextBoxMngrUserName)
 
 # Site Admin Password Text
@@ -140,7 +142,7 @@ $Tab1.Controls.Add($TextBoxMngrPassWord)
 $Tab1.Controls.Add((Generate_Label $startx 160 "UserName:"))
 
 # Username TextBox
-$TextBoxUserName=Generate_TextBox $startx 190 $textboxw $textboxh "test_365login@online.via.edu.au"
+$TextBoxUserName=Generate_TextBox $startx 190 $textboxw $textboxh ""
 $Tab1.Controls.Add($TextBoxUserName)
 
 # Password Text
@@ -187,10 +189,10 @@ $SubmitButton.Add_Click({
 
     #To Secure String
     $AdminWP = ConvertTo-SecureString -String $TextBoxMngrPassWord.Text -AsPlainText -Force
-    $UserWP = ConvertTo-SecureString -String $TextBoxPassWord.Text -AsPlainText -Force
+    # $UserWP = ConvertTo-SecureString -String $TextBoxPassWord.Text -AsPlainText -Force
 
     # Run update
-    Update_Password $TextBoxMngrUserName.Text $AdminWP $TextBoxUserName.Text $UserWP
+    Update_Password $TextBoxMngrUserName.Text $AdminWP $TextBoxUserName.Text $TextBoxPassWord.Text
 })
 $Tab1.Controls.Add($SubmitButton)
 
